@@ -14,18 +14,25 @@
   aws-sdk-cpp,
   faiss,
   zlib,
-  llvmPackages ? null,
+  llvmPackages_20,
 }:
 
-stdenv.mkDerivation (finalAttrs: {
+# TuringDB requires LLVM 20 if on aarch Darwin
+let turingstdenv =
+  if stdenv.isDarwin
+  then llvmPackages_20.stdenv
+  else stdenv;
+in
+
+turingstdenv.mkDerivation (finalAttrs: {
   pname = "turingdb";
   version = "1.20";
 
   src = fetchFromGitHub {
     owner = "turing-db";
     repo = "turingdb";
-    rev = "f10b6f02c5879c2a4518518efbcd55e3a1642a8d";
-    hash = "sha256-SPNG4CpcwN68GgTPLoH/+MdUV3BnOK6cpBsgm8zNjQY=";
+    rev = "932ae3324d7a66c6c533d11fd005a479715ced77";
+    hash = "sha256-0Fe4jhT4+kPa9HpZ81cD7s++inNcPxs4v3sR0m/P8tg=";
     fetchSubmodules = true;
   };
 
@@ -45,17 +52,18 @@ stdenv.mkDerivation (finalAttrs: {
     aws-sdk-cpp
     faiss
     zlib
-  ] ++ lib.optionals stdenv.isDarwin [llvmPackages.openmp];
+  ] ++ lib.optionals turingstdenv.isDarwin [llvmPackages_20.openmp];
 
   env.NIX_CFLAGS_COMPILE = "-DHEAD_COMMIT_TIMESTAMP=${toString builtins.currentTime}";
 
   cmakeFlags = [
+    "-DNIX_BUILD=ON" # CMake flag for top-level turingdb CMakeLists
     "-DCMAKE_BUILD_TYPE=Release"
     "-DCMAKE_CXX_FLAGS=-fopenmp"
   ] ++ lib.optionals stdenv.isDarwin [
     "-DOpenMP_CXX_FLAGS=-fopenmp"
     "-DOpenMP_CXX_LIB_NAMES=omp"
-    "-DOpenMP_omp_LIBRARY=${lib.getLib llvmPackages.openmp}/lib/libomp.dylib"
+    "-DOpenMP_omp_LIBRARY=${lib.getLib llvmPackages_20.openmp}/lib/libomp.dylib"
   ];
 
   preConfigure = ''
@@ -87,6 +95,6 @@ stdenv.mkDerivation (finalAttrs: {
     license = lib.licenses.bsl11;
     platforms = [ "x86_64-linux" "aarch64-darwin" ];
     mainProgram = "turingdb";
-    maintainers = with maintainers; [ roquess ];
+    maintainers = with maintainers; [ roquess cyrusknopf];
   };
 })
